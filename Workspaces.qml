@@ -19,7 +19,7 @@ import "IconRules.js" as IconRules
 // it.
 BarWidget {
   id: root
-  moduleName: "io.github.thetrueferret.decent-workspaces"
+  moduleName: "io.github.ehlxr.advanced-workspaces"
 
   // --- settings, read from this widget's shell.json layout entry ------------
   readonly property bool perMonitor: root.setting("perMonitor", true)
@@ -433,7 +433,7 @@ BarWidget {
       var home = Quickshell.env("HOME")
       base = (home && home !== "") ? home + "/.cache" : "/tmp"
     }
-    return base + "/decent-workspaces/icons"
+    return base + "/advanced-workspaces/icons"
   }
 
   // Slugs already on disk, slugs being fetched, and slugs that came back empty.

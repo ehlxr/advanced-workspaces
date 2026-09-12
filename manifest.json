@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.thetrueferret.decent-workspaces",
-  "name": "Decent Workspaces",
+  "id": "io.github.ehlxr.advanced-workspaces",
+  "name": "Advanced Workspaces",
   "version": "1.1.0",
-  "author": "TheTrueFerret",
+  "author": "ehlxr",
   "license": "MIT",
-  "description": "Per-monitor workspace indicators: shows only workspaces with windows, with an app icon beside each workspace number",
+  "description": "Per-monitor workspace indicators: only workspaces with windows, each labelled with its number and the real logo of every window on it. Fork of Decent Workspaces by TheTrueFerret.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "Workspaces.qml"
   },
   "barWidget": {
-    "displayName": "Decent Workspaces",
-    "description": "Only the workspaces in use, on the monitor they belong to, with app icons",
+    "displayName": "Advanced Workspaces",
+    "description": "Only the workspaces in use, on the monitor they belong to, with real app logos",
     "category": "Compositor",
     "allowMultiple": false,
     "defaultSection": "left"

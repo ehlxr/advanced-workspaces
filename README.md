@@ -1,7 +1,13 @@
+> Fork of [Decent Workspaces](https://github.com/TheTrueFerret/omarchy-decent-workspaces)
+> by TheTrueFerret. The difference: every window is drawn with its real app
+> logo — resolved from the system icon theme, or fetched once and cached —
+> instead of only a Nerd Font glyph, with the upstream glyph table kept as the
+> fallback. See [Logos](#logos).
+
 AI Generated, didn't even look at the code, but does the job.
 I actually created this manually for waybar in the past... ain't doing that again ;)
 
-# Decent Workspaces
+# Advanced Workspaces
 
 ![Three bars stacked: the default showing only workspaces 1, 3, 4, 5 and 8 with app icons plus a scratchpad pill; the same bar with showEmpty filling in every number to 10; and again with maxIcons collapsing extra windows into +N](preview.png)
 
@@ -24,8 +30,8 @@ Click a workspace to focus it.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/TheTrueFerret/omarchy-decent-workspaces.git --enable
-omarchy bar put io.github.thetrueferret.decent-workspaces --section left --index 1
+omarchy plugin add https://github.com/ehlxr/advanced-workspaces.git --enable
+omarchy bar put io.github.ehlxr.advanced-workspaces --section left --index 1
 ```
 
 You probably want to drop the stock widget at the same time, since two workspace
@@ -38,7 +44,7 @@ omarchy plugin disable omarchy.workspaces
 ## Settings
 
 Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
-`omarchy bar set io.github.thetrueferret.decent-workspaces <key> <value> --json`:
+`omarchy bar set io.github.ehlxr.advanced-workspaces <key> <value> --json`:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -57,8 +63,8 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `scratchpadLabel` | `S` | Text on the scratchpad pill. Set `""` for icons only. |
 
 ```bash
-omarchy bar set io.github.thetrueferret.decent-workspaces maxIcons 4 --json
-omarchy bar set io.github.thetrueferret.decent-workspaces showEmpty true --json
+omarchy bar set io.github.ehlxr.advanced-workspaces maxIcons 4 --json
+omarchy bar set io.github.ehlxr.advanced-workspaces showEmpty true --json
 ```
 
 Defaults match the behaviour above, so an existing install keeps working
@@ -93,11 +99,11 @@ empty tile behind.
 
 `remoteIcons` adds a fourth source: when a window has no local icon, or is a
 browser tab on a site whose logo is worth having, the logo is downloaded once
-and cached on disk under `~/.cache/decent-workspaces/icons/`. One request per
+and cached on disk under `~/.cache/advanced-workspaces/icons/`. One request per
 brand, ever — a restart reuses the cache.
 
 ```bash
-omarchy bar set io.github.thetrueferret.decent-workspaces remoteIcons true --json
+omarchy bar set io.github.ehlxr.advanced-workspaces remoteIcons true --json
 ```
 
 It is off by default, and it is the only part of the widget that touches the
@@ -109,7 +115,7 @@ over jsDelivr; `remoteIconSource` points `{slug}` at any other host that serves
 an image:
 
 ```bash
-omarchy bar set io.github.thetrueferret.decent-workspaces remoteIconSource \
+omarchy bar set io.github.ehlxr.advanced-workspaces remoteIconSource \
   'https://example.com/logos/{slug}.png' --json
 ```
 
@@ -132,9 +138,9 @@ Hyprland workspace ids are global. If your setup pins fixed banks such as
 `1-10`, `11-20` and `21-30`, the widget can show every bank as `1-10`:
 
 ```bash
-omarchy bar set io.github.thetrueferret.decent-workspaces localWorkspaceNumbers true --json
-omarchy bar set io.github.thetrueferret.decent-workspaces workspacesPerMonitor 10 --json
-omarchy bar set io.github.thetrueferret.decent-workspaces maxWorkspaceId 20 --json
+omarchy bar set io.github.ehlxr.advanced-workspaces localWorkspaceNumbers true --json
+omarchy bar set io.github.ehlxr.advanced-workspaces workspacesPerMonitor 10 --json
+omarchy bar set io.github.ehlxr.advanced-workspaces maxWorkspaceId 20 --json
 ```
 
 Labels only — pinning the banks stays your Hyprland config's job.
@@ -181,7 +187,7 @@ dedicated Chromium PWAs are (`twitter-x`, `brave-x.com`).
 ## Uninstall
 
 ```bash
-omarchy plugin remove io.github.thetrueferret.decent-workspaces
+omarchy plugin remove io.github.ehlxr.advanced-workspaces
 ```
 
 ## Development
@@ -190,13 +196,17 @@ Editing a bar widget needs a shell restart — the "local plugin changed,
 reloading" hot reload does not rebuild bar surfaces:
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.thetrueferret.decent-workspaces
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.ehlxr.advanced-workspaces
 /usr/lib/qt6/bin/qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" Workspaces.qml
 omarchy-restart-shell
 qs log -i "$(qs list --all | awk '/^Instance/ {print substr($2, 1, length($2)-1); exit}')"
 ```
 
 ## Credits
+
+Forked from [Decent Workspaces](https://github.com/TheTrueFerret/omarchy-decent-workspaces)
+by [@TheTrueFerret](https://github.com/TheTrueFerret) (MIT), which is where the
+workspace, scratchpad, and glyph work below all comes from.
 
 The icon map is adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 
