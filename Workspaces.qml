@@ -821,11 +821,17 @@ BarWidget {
           property bool hovered: false
 
           radius: Style.spaceReal(8)
+          // Every pill carries a fill, from the theme's own control tokens:
+          // the workspace you are on takes the accent, the rest sit on the
+          // neutral idle fill so they read as pills instead of floating
+          // numbers, and hovering lifts one a step without reaching the accent.
+          // The alphas are the theme's (`normal-fill-alpha` and friends), so a
+          // theme that wants quieter pills can say so.
           color: pill.urgent ? root.urgentColor
-            : pill.active ? Util.alpha(root.fgColor, root.monitorFocused ? 0.22 : 0.10)
-            : pill.hovered ? Util.alpha(root.fgColor, 0.15)
-            : "transparent"
-          opacity: pill.active ? 1 : 0.7
+            : pill.active ? Util.alpha(Color.accent, Style.selectedFillAlpha * (root.monitorFocused ? 1 : 0.45))
+            : pill.hovered ? Style.hoverFillFor(root.fgColor, Color.accent, root.urgentColor)
+            : Style.normalFillFor(root.fgColor, Color.accent, root.urgentColor)
+          opacity: 1
 
           Layout.alignment: Qt.AlignVCenter
           Layout.fillHeight: true
@@ -878,10 +884,13 @@ BarWidget {
         property bool hovered: false
 
         radius: Style.spaceReal(8)
-        color: scratchpad.hovered ? Util.alpha(root.fgColor, 0.15)
-          : root.scratchpadOpen ? Util.alpha(root.fgColor, root.monitorFocused ? 0.22 : 0.10)
-          : "transparent"
-        opacity: root.scratchpadOpen ? 1 : 0.7
+        // Same fill vocabulary as the workspace pills: accent while the stash
+        // is open on this monitor, the neutral idle fill while it only holds
+        // windows, one step up on hover.
+        color: scratchpad.hovered ? Style.hoverFillFor(root.fgColor, Color.accent, root.urgentColor)
+          : root.scratchpadOpen ? Util.alpha(Color.accent, Style.selectedFillAlpha * (root.monitorFocused ? 1 : 0.45))
+          : Style.normalFillFor(root.fgColor, Color.accent, root.urgentColor)
+        opacity: 1
 
         Layout.alignment: Qt.AlignVCenter
         Layout.fillHeight: true

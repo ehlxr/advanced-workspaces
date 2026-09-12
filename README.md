@@ -19,8 +19,12 @@ them:
 - **Only this monitor's workspaces.** Each bar filters to its own monitor and
   highlights *that monitor's* active workspace, softer where keyboard focus
   isn't, so you can tell at a glance where you are.
-- **App icons beside the number.** Every open window contributes a Nerd Font
-  glyph.
+- **App icons beside the number.** Every open window contributes a real logo,
+  with the Nerd Font glyph as the fallback. See [Logos](#logos).
+- **Pills that follow the theme.** The workspace you are on is filled with the
+  theme's accent, the others with its neutral idle fill, and hovering lifts a
+  pill one step. The alphas come from the theme's control tokens
+  (`[controls]` in `shell.toml`), so there is no hard-coded colour to fight.
 - **The scratchpad, when it holds something.** Windows stashed with
   `SUPER + ALT + S` get their own pill instead of vanishing until you toggle
   the stash open.
