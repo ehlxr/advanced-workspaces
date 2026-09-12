@@ -46,6 +46,9 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `showEmpty` | `false` | Keep every workspace number on the bar up to `maxWorkspaceId`, occupied or not. Set `true` for stock-like behaviour. |
 | `showIcons` | `true` | Draw an app icon per open window. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
+| `systemIcons` | `true` | Draw each window's real logo from its desktop entry and the system icon theme. Set `false` to always use Nerd Font glyphs. |
+| `remoteIcons` | `false` | Fetch brand logos over the network when nothing local resolves. See [Logos](#logos). |
+| `remoteIconSource` | dashboard-icons via jsDelivr | URL template for the logo fetch; `{slug}` is replaced with the brand slug. |
 | `maxWorkspaceId` | `10` | Highest workspace id to consider. |
 | `localWorkspaceNumbers` | `false` | Label each monitor's bank from 1 instead of using the global Hyprland id. |
 | `workspacesPerMonitor` | `10` | Size of a bank when local numbering is on. |
@@ -59,7 +62,59 @@ omarchy bar set io.github.thetrueferret.decent-workspaces showEmpty true --json
 ```
 
 Defaults match the behaviour above, so an existing install keeps working
-untouched — every addition is off until you turn it on.
+untouched. The one default that changes what you see is `systemIcons`: windows
+now draw their real logo where one resolves and fall back to the Nerd Font
+glyph where none does. `remoteIcons` is the only setting that reaches the
+network, and it stays off until you turn it on.
+
+## Logos
+
+Every window's icon comes from the most specific source that resolves:
+
+1. **A site rule.** A browser tab whose title matches one of the site patterns
+   (a GitHub tab, a YouTube tab) shows that site's logo rather than the
+   browser's.
+2. **The application's own icon.** The window class is looked up among the
+   desktop entries, the entry's `Icon=` is resolved against the system icon
+   theme, and that is drawn. This is what gets VS Code (`code` → `vscode`) and
+   Vivaldi (`vivaldi-stable` → `vivaldi`) right, and it covers most apps.
+3. **The Nerd Font glyph** the rule table picked, as before.
+
+Steps 1 and 2 are entirely offline and are what `systemIcons` turns on.
+
+Whichever source wins, the artwork is drawn into a fixed rounded tile with the
+image clipped to it. Icons arrive in every shape and with their own padding
+baked in, so a bare circle sitting next to a full-bleed square would otherwise
+read as two different sizes; the tile gives every window the same footprint.
+A logo that fails to decode falls back to the glyph rather than leaving an
+empty tile behind.
+
+### Fetching logos over the network
+
+`remoteIcons` adds a fourth source: when a window has no local icon, or is a
+browser tab on a site whose logo is worth having, the logo is downloaded once
+and cached on disk under `~/.cache/decent-workspaces/icons/`. One request per
+brand, ever — a restart reuses the cache.
+
+```bash
+omarchy bar set io.github.thetrueferret.decent-workspaces remoteIcons true --json
+```
+
+It is off by default, and it is the only part of the widget that touches the
+network. What is sent is a brand slug — `github`, `openai`, `vivaldi` — never a
+window title or a class: titles are matched against the site patterns locally,
+and only the slug of a match is requested. Fetches default to
+[homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons)
+over jsDelivr; `remoteIconSource` points `{slug}` at any other host that serves
+an image:
+
+```bash
+omarchy bar set io.github.thetrueferret.decent-workspaces remoteIconSource \
+  'https://example.com/logos/{slug}.png' --json
+```
+
+A slug the host does not have is remembered as a miss and falls back to the
+glyph instead of retrying on every render.
 
 ### Keeping every workspace on the bar
 
@@ -106,6 +161,23 @@ To find the class of a window you want to add:
 hyprctl clients -j | jq -r '.[] | "\(.class)\t\(.title)"'
 ```
 
+This table decides the glyph, which is what gets drawn when no logo resolves
+for the window (see [Logos](#logos) for the order the sources are tried in).
+
+### Adding a site logo
+
+Brand slugs for the logo fetch live in `siteLogos`, just below the glyph table,
+and are matched against the window title the same way:
+
+```js
+{ pattern: ".*github.*", logo: "github" }
+```
+
+The slug is whatever the host serves — with the default source that is
+`https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/<slug>.png`. Add
+`cls: true` when the pattern is a window class rather than a title, as the
+dedicated Chromium PWAs are (`twitter-x`, `brave-x.com`).
+
 ## Uninstall
 
 ```bash
@@ -119,7 +191,7 @@ reloading" hot reload does not rebuild bar surfaces:
 
 ```bash
 omarchy plugin validate ~/.config/omarchy/plugins/io.github.thetrueferret.decent-workspaces
-qmllint -I ~/.local/share/omarchy/shell Workspaces.qml
+/usr/lib/qt6/bin/qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" Workspaces.qml
 omarchy-restart-shell
 qs log -i "$(qs list --all | awk '/^Instance/ {print substr($2, 1, length($2)-1); exit}')"
 ```
