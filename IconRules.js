@@ -168,12 +168,41 @@ var compiled = null
 // dedicated rules are not gated and still work in the window manager.
 var browsers = /firefox|zen|waterfox|librewolf|floorp|mercury|cachy|microsoft-edge|brave|chromium|thorium|chrome|vivaldi|edge|browser/
 
+// Tab titles put the site in a segment of its own - "Inbox (3) - Gmail",
+// "pull request · GitHub" - so that is what a site pattern is tested against.
+// Matching the whole title instead made a page that merely mentions a brand
+// wear its logo: a GitHub project whose description reads "…plugin with Gmail,
+// HEY and IMAP…" is not Gmail.
+//
+// The patterns are written as "the title contains x" (`.*github.*`), which says
+// nothing once a segment is the subject, so the redundant `.*` wrappers come off
+// and the rest is anchored to the segment.
+var titleSeparators = / [-–—|·:] /
+
+function segmentRegex(pattern) {
+  var body = String(pattern)
+  if (body.indexOf(".*") === 0) body = body.slice(2)
+  if (body.length > 2 && body.slice(-2) === ".*") body = body.slice(0, -2)
+  return new RegExp("^(?:" + body + ")$", "i")
+}
+
+function namesTheSite(pattern, title) {
+  if (!title) return false
+  var segments = title.split(titleSeparators)
+  for (var i = 0; i < segments.length; i++) {
+    var segment = segments[i].replace(/^\s+|\s+$/g, "")
+    if (segment !== "" && pattern.test(segment)) return true
+  }
+  return false
+}
+
 function patterns() {
   if (compiled) return compiled
   compiled = []
   for (var i = 0; i < rules.length; i++) {
     compiled.push({
       re: new RegExp(rules[i].pattern, "i"),
+      segRe: segmentRegex(rules[i].pattern),
       icon: rules[i].icon,
       browserOnly: rules[i].browserOnly === true,
       classOnly: rules[i].classOnly === true
@@ -190,6 +219,7 @@ function logoPatterns() {
   for (var i = 0; i < siteLogos.length; i++) {
     compiledLogos.push({
       re: new RegExp(siteLogos[i].pattern, "i"),
+      segRe: segmentRegex(siteLogos[i].pattern),
       logo: siteLogos[i].logo,
       cls: siteLogos[i].cls === true
     })
@@ -225,9 +255,19 @@ function match(cls, title) {
       if (entry.re.test(cls)) { icon = entry.icon; break }
       continue
     }
+    // A site rule has to name the page, though a PWA still matches on the class
+    // it was given (vivaldi-chatgpt.com__-Default). Every other rule is about
+    // the application, so those keep matching anywhere in the title.
+    if (entry.browserOnly) {
+      if (namesTheSite(entry.segRe, title) || entry.re.test(cls)) {
+        icon = entry.icon
+        site = true
+        break
+      }
+      continue
+    }
     if (entry.re.test(title) || entry.re.test(cls)) {
       icon = entry.icon
-      site = entry.browserOnly
       break
     }
   }
@@ -239,7 +279,7 @@ function match(cls, title) {
   var logos = logoPatterns()
   for (var j = 0; j < logos.length; j++) {
     var candidate = logos[j]
-    if (candidate.re.test(title) && browsers.test(cls)) {
+    if (namesTheSite(candidate.segRe, title) && browsers.test(cls)) {
       logo = candidate.logo
       site = true
       break

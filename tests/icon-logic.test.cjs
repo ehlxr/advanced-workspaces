@@ -104,6 +104,51 @@ test('a browser tab on a named site keeps the site, not the browser', () => {
   assert.equal(github.logo, 'github')
 })
 
+test('a site rule matches the tab segment that names it', () => {
+  const cases = [
+    ['收件箱 (3) - me@gmail.com - gmail', 'gmail'],
+    ['gmail', 'gmail'],
+    ['Inbox | Gmail', 'gmail'],
+    ['Inbox — Gmail', 'gmail'],
+    ['pull request · GitHub', 'github'],
+    ['Some Song - YouTube', 'youtube']
+  ]
+  for (const [title, logo] of cases) {
+    const rule = plain(Rules.match('vivaldi-stable', title.toLowerCase()))
+    assert.equal(rule.site, true, `expected a site match for "${title}"`)
+    assert.equal(rule.logo, logo, `wrong logo for "${title}"`)
+  }
+})
+
+test('a page that merely mentions a brand does not wear its logo', () => {
+  // The case that prompted this: a project page whose description names Gmail,
+  // open in a browser. It is not Gmail.
+  const mentioned = plain(Rules.match('vivaldi-stable',
+    'huacnlee/omamail: omarchy mail plugin with gmail, hey and imap support'))
+  assert.equal(mentioned.site, false)
+  assert.equal(mentioned.logo, '')
+
+  const buried = plain(Rules.match('vivaldi-stable', 'my youtube subscription list backup'))
+  assert.equal(buried.site, false)
+  assert.equal(buried.logo, '')
+})
+
+test('non-site rules still match anywhere in the title', () => {
+  // Picture-in-Picture is an application rule, not a site, so a substring match
+  // is still the right answer for it.
+  const pip = plain(Rules.match('firefox', 'video - picture-in-picture'))
+  assert.equal(pip.site, false)
+  assert.notEqual(pip.icon, Rules.fallback)
+})
+
+test('a web-app window still matches on its own class', () => {
+  // A Chromium PWA reports a class of its own, and that is a site even when the
+  // title says nothing about it.
+  const pwa = plain(Rules.match('vivaldi-chatgpt.com__-default', 'sign in - google account'))
+  assert.equal(pwa.site, true)
+  assert.notEqual(pwa.icon, Rules.fallback)
+})
+
 test('a plain browser window falls through to the browser', () => {
   const plainPage = plain(Rules.match('vivaldi-stable', 'some article'))
   assert.equal(plainPage.site, false)
