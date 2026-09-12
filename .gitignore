@@ -1,0 +1,5 @@
+# Command Code session data - never part of the plugin.
+.commandcode/
+
+*.bak
+*.swp

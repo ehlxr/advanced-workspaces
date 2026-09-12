@@ -55,6 +55,7 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `systemIcons` | `true` | Draw each window's real logo from its desktop entry and the system icon theme. Set `false` to always use Nerd Font glyphs. |
 | `remoteIcons` | `false` | Fetch brand logos over the network when nothing local resolves. See [Logos](#logos). |
 | `remoteIconSource` | dashboard-icons via jsDelivr | URL template for the logo fetch; `{slug}` is replaced with the brand slug. |
+| `iconOverrides` | `{}` | Per-app icon overrides, keyed by window class or `title:`. See [When a logo is wrong](#when-a-logo-is-wrong). |
 | `maxWorkspaceId` | `10` | Highest workspace id to consider. |
 | `localWorkspaceNumbers` | `false` | Label each monitor's bank from 1 instead of using the global Hyprland id. |
 | `workspacesPerMonitor` | `10` | Size of a bank when local numbering is on. |
@@ -77,16 +78,22 @@ network, and it stays off until you turn it on.
 
 Every window's icon comes from the most specific source that resolves:
 
-1. **A site rule.** A browser tab whose title matches one of the site patterns
+1. **Your override**, if you set one for that window's class (or exact title).
+   An override is an instruction, so it outranks everything below.
+2. **A site rule.** A browser tab whose title matches one of the site patterns
    (a GitHub tab, a YouTube tab) shows that site's logo rather than the
    browser's.
-2. **The application's own icon.** The window class is looked up among the
-   desktop entries, the entry's `Icon=` is resolved against the system icon
-   theme, and that is drawn. This is what gets VS Code (`code` → `vscode`) and
-   Vivaldi (`vivaldi-stable` → `vivaldi`) right, and it covers most apps.
-3. **The Nerd Font glyph** the rule table picked, as before.
+3. **The application's own icon.** A desktop entry whose id matches the window
+   class exactly wins outright; failing that the class goes through
+   `heuristicLookup`. Either way the entry's `Icon=` is resolved against the
+   system icon theme. This is what gets VS Code (`code` → `vscode`) and Vivaldi
+   (`vivaldi-stable` → `vivaldi`) right, and it covers most apps.
+4. **The Nerd Font glyph** the rule table picked, when a fetch is not an option.
 
-Steps 1 and 2 are entirely offline and are what `systemIcons` turns on.
+Steps 1 to 3 are entirely offline and are what `systemIcons` turns on. The
+exact-id match in step 3 matters for short, generic classes: the heuristic
+scores entries by name and exec similarity, so a class like `zen` can lose to a
+worse entry even when its own desktop entry is sitting right there.
 
 Whichever source wins, the artwork is drawn into a fixed rounded tile with the
 image clipped to it. Icons arrive in every shape and with their own padding
@@ -94,6 +101,27 @@ baked in, so a bare circle sitting next to a full-bleed square would otherwise
 read as two different sizes; the tile gives every window the same footprint.
 A logo that fails to decode falls back to the glyph rather than leaving an
 empty tile behind.
+
+### When a logo is wrong
+
+Set `iconOverrides` on this widget's entry to pin a window down by hand. Keys
+are window classes (any case), or `title:<exact title>` for one window when the
+class is too broad. Values are an icon-theme name, a path to an image, or a
+literal glyph to draw as text:
+
+```bash
+omarchy bar set io.github.ehlxr.advanced-workspaces iconOverrides '{
+  "zen": "zen-browser",
+  "title:LibrePods": "me.kavishdevar.librepods",
+  "code": "󰨞",
+  "steam": "/home/me/.local/share/steam.png"
+}' --json
+```
+
+A value the icon theme does not have is drawn as text rather than showing
+nothing, which is what makes a glyph or an emoji work. Overridden windows are
+skipped by the network fetch, so nothing is downloaded for them. To find a
+window's class, run `hyprctl clients -j | jq -r '.[] | "\(.class)\t\(.title)"'`.
 
 ### Fetching logos over the network
 
@@ -192,8 +220,17 @@ omarchy plugin remove io.github.ehlxr.advanced-workspaces
 
 ## Development
 
-Editing a bar widget needs a shell restart — the "local plugin changed,
-reloading" hot reload does not rebuild bar surfaces:
+The icon decisions live in `IconRules.js` (the rule table) and `IconLogic.js`
+(slugs, overrides) as plain functions with no Quickshell dependency, so they run
+under Node:
+
+```bash
+npm test        # node --test
+```
+
+The QML itself needs a running desktop. Editing a bar widget needs a shell
+restart — the "local plugin changed, reloading" hot reload does not rebuild bar
+surfaces:
 
 ```bash
 omarchy plugin validate ~/.config/omarchy/plugins/io.github.ehlxr.advanced-workspaces
@@ -201,6 +238,8 @@ omarchy plugin validate ~/.config/omarchy/plugins/io.github.ehlxr.advanced-works
 omarchy-restart-shell
 qs log -i "$(qs list --all | awk '/^Instance/ {print substr($2, 1, length($2)-1); exit}')"
 ```
+
+CI runs `npm test` only; the widget is verified by hand against a real session.
 
 ## Credits
 

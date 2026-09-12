@@ -1,0 +1,21 @@
+name: tests
+
+# Only the pure icon logic can run here: it is plain JS with no Quickshell or
+# Hyprland dependency, which is the whole reason it lives in IconLogic.js and
+# IconRules.js instead of inside the widget. The QML itself needs a running
+# desktop, so it is validated by hand (see the Development section of the
+# README) rather than in CI.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test

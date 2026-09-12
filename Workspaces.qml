@@ -7,6 +7,7 @@ import Quickshell.Widgets
 import qs.Commons
 import qs.Ui
 import "IconRules.js" as IconRules
+import "IconLogic.js" as IconLogic
 
 // Workspace indicators that show only what is actually there: workspaces with
 // windows on them, filtered to the monitor this bar instance lives on, each
@@ -40,6 +41,18 @@ BarWidget {
   // that URL works and a self-hosted mirror is one setting away.
   readonly property string remoteIconSource: root.setting("remoteIconSource",
     "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/{slug}.png")
+  // Per-app icon overrides, for when the resolved logo is not the one you want:
+  //
+  //   "iconOverrides": {
+  //     "zen": "zen-browser",              // an icon-theme name
+  //     "title:LibrePods": "me.kavishdevar.librepods",   // one window, by title
+  //     "code": "󰨞",                        // a literal glyph, drawn as text
+  //     "steam": "/home/me/steam.png"      // or an image by path
+  //   }
+  //
+  // A class key matches in any case, and an override outranks every other
+  // source including the site table.
+  readonly property var iconOverrides: root.setting("iconOverrides", ({}))
   readonly property int maxWorkspaceId: root.setting("maxWorkspaceId", 10)
   // Label each monitor's bank as 1..workspacesPerMonitor instead of using the
   // global Hyprland id. Display only; ids and dispatches stay global.
@@ -397,6 +410,17 @@ BarWidget {
     }
   }
 
+  // The desktop entry for a window class, or null. An exact id match is tried
+  // first and wins outright: heuristicLookup scores by name and exec similarity,
+  // so a short or generic class can lose to a worse entry even when the id is
+  // identical. byId takes the id without its .desktop suffix.
+  function desktopEntryFor(cls) {
+    var exact = null
+    try { exact = DesktopEntries.byId(cls) } catch (e) { exact = null }
+    if (exact) return exact
+    try { return DesktopEntries.heuristicLookup(cls) } catch (e) { return null }
+  }
+
   // The desktop entry is the only place that knows an application's icon name,
   // and the window class is not it: Vivaldi's class is `vivaldi-stable` while
   // its icon is `vivaldi`, and VS Code's class is `code` while its icon is
@@ -408,8 +432,7 @@ BarWidget {
     if (cached !== undefined) return cached
 
     var source = ""
-    var entry = null
-    try { entry = DesktopEntries.heuristicLookup(cls) } catch (e) { entry = null }
+    var entry = root.desktopEntryFor(cls)
     if (entry && entry.icon) {
       var name = String(entry.icon)
       // An entry may name a file outright; there is nothing to theme-resolve.
@@ -547,34 +570,6 @@ BarWidget {
     }
   }
 
-  function slugify(value) {
-    var text = String(value || "")
-    if (text.slice(-8) === ".desktop") text = text.slice(0, -8)
-    var parts = text.split(".")
-    var candidate = parts[parts.length - 1].toLowerCase()
-    return candidate.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-  }
-
-  // Brand-slug guesses for a window, most likely first. The desktop entry's
-  // `Icon=` is the closest thing to a brand name (`code` -> `vscode`,
-  // `vivaldi-stable` -> `vivaldi`), its id is next, and the window class is the
-  // last resort. A wrong guess only 404s, and is remembered rather than
-  // retried.
-  function remoteCandidates(cls, preferred) {
-    var values = [preferred]
-    var entry = null
-    try { entry = DesktopEntries.heuristicLookup(cls) } catch (e) { entry = null }
-    if (entry) values.push(entry.icon, entry.id)
-    values.push(cls)
-
-    var out = []
-    for (var i = 0; i < values.length; i++) {
-      var slug = root.slugify(values[i])
-      if (slug !== "" && out.indexOf(slug) === -1) out.push(slug)
-    }
-    return out
-  }
-
   // Whether a chain still has a candidate worth fetching. One that already
   // resolved has nothing to do, and one already queued would only duplicate the
   // request.
@@ -586,8 +581,17 @@ BarWidget {
     return candidates.length > 0
   }
 
+  // Brand-slug guesses for a window, most likely first: a brand the rule table
+  // named, then the desktop entry's `Icon=` (`code` -> `vscode`,
+  // `vivaldi-stable` -> `vivaldi`), then its id, then the window class. A wrong
+  // guess only 404s, and is remembered rather than retried.
   function remoteCandidatesFor(cls, rule) {
-    return rule.site || rule.logo !== "" ? [rule.logo] : root.remoteCandidates(cls, "")
+    if (rule.site || rule.logo !== "") return rule.logo !== "" ? [rule.logo] : []
+    var entry = root.desktopEntryFor(cls)
+    var values = []
+    if (entry) values.push(entry.icon, entry.id)
+    values.push(cls)
+    return IconLogic.remoteCandidates(values)
   }
 
   // Downloads are requested from here rather than from the icon model. The
@@ -617,6 +621,8 @@ BarWidget {
         var title = root.windowTitle(tops[t])
         if (!cls && !title) continue
         var rule = IconRules.match(cls.toLowerCase(), title.toLowerCase())
+        // The user pinned this window down by hand; there is nothing to look up.
+        if (root.overrideIconFor(cls, title)) continue
         // A local icon, or a site rule with no brand behind it, means there is
         // nothing to fetch.
         if (rule.site && rule.logo === "") continue
@@ -639,6 +645,17 @@ BarWidget {
     return ""
   }
 
+  // The user's override for a window, already reduced to something drawable, or
+  // null. Kept separate from iconEntryFor so collectRemoteIcons can skip a
+  // window the user has pinned down by hand.
+  function overrideIconFor(cls, title) {
+    if (!root.iconOverrides) return null
+    var value = IconLogic.lookupOverride(root.iconOverrides, cls, title)
+    return IconLogic.classifyOverride(value, function(name) {
+      return Quickshell.iconPath(name, true)
+    })
+  }
+
   // One entry per visible window: a logo when one resolves, otherwise the glyph
   // the rule table picked. Purely a read — see collectRemoteIcons for what
   // actually goes and fetches.
@@ -648,6 +665,15 @@ BarWidget {
     if (!cls && !title) return { glyph: IconRules.fallback, source: "" }
 
     var rule = IconRules.match(cls.toLowerCase(), title.toLowerCase())
+
+    // An override is the user telling us what this window is, so it outranks
+    // even the site table.
+    var override = root.overrideIconFor(cls, title)
+    if (override) {
+      return override.kind === "image"
+        ? { glyph: rule.icon, source: override.source }
+        : { glyph: override.value, source: "" }
+    }
 
     // A site rule describes what the window is showing, so it outranks the
     // application: a GitHub tab is a GitHub tab, not a browser.
