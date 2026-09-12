@@ -391,9 +391,20 @@ BarWidget {
     return 1
   }
 
-  // The square a logo is drawn in, and the corner every logo's tile shares.
-  readonly property int iconCanvasSize: Style.bar.iconCanvas
-  readonly property int iconTileRadius: Math.max(1, Math.round(Style.spaceReal(4)))
+  // Logo size and spacing, in pixels. A logo is drawn smaller than the bar's
+  // icon canvas because at the canvas size it crowded the workspace number, and
+  // `iconGap` is the space between two entries in a pill - so it separates one
+  // logo from the next as well as from the number.
+  function pixelSetting(name, fallback, minimum) {
+    var value = Number(root.setting(name, fallback))
+    if (!isFinite(value)) return fallback
+    return Math.max(minimum, Math.round(value))
+  }
+
+  readonly property int iconSize: root.pixelSetting("iconSize", Math.round(Style.bar.iconCanvas * 0.8), 6)
+  readonly property int iconGap: root.pixelSetting("iconGap", Math.round(Style.spaceReal(4)), 0)
+  // The tile corner, kept at the same fraction of the tile as the size changes.
+  readonly property int iconTileRadius: Math.max(1, Math.round(root.iconSize * 0.25))
 
   // Desktop entries are scanned asynchronously and only land a second or two
   // after the shell starts, so an icon resolved before then must be discarded
@@ -738,14 +749,14 @@ BarWidget {
     // leaving an empty tile behind.
     readonly property bool hasLogo: windowIcon.imageSource !== "" && logo.status !== Image.Error
 
-    implicitWidth: windowIcon.hasLogo ? root.iconCanvasSize : glyph.implicitWidth
-    implicitHeight: windowIcon.hasLogo ? root.iconCanvasSize : glyph.implicitHeight
+    implicitWidth: windowIcon.hasLogo ? root.iconSize : glyph.implicitWidth
+    implicitHeight: windowIcon.hasLogo ? root.iconSize : glyph.implicitHeight
 
     ClippingRectangle {
       visible: windowIcon.hasLogo
       anchors.centerIn: parent
-      width: root.iconCanvasSize
-      height: root.iconCanvasSize
+      width: root.iconSize
+      height: root.iconSize
       radius: root.iconTileRadius
       color: Util.alpha(root.fgColor, 0.12)
 
@@ -758,8 +769,8 @@ BarWidget {
         mipmap: true
         // Decode at physical pixels: a logical-size decode leaves PNG icons
         // upscaled and blurry on HiDPI displays.
-        sourceSize.width: Math.round(root.iconCanvasSize * root.devicePixelRatio)
-        sourceSize.height: Math.round(root.iconCanvasSize * root.devicePixelRatio)
+        sourceSize.width: Math.round(root.iconSize * root.devicePixelRatio)
+        sourceSize.height: Math.round(root.iconSize * root.devicePixelRatio)
       }
     }
 
@@ -822,13 +833,17 @@ BarWidget {
           implicitWidth: root.vertical ? (root.barSize - Style.spaceReal(8)) : content.implicitWidth + Style.spaceReal(16)
           implicitHeight: root.vertical ? content.implicitHeight + Style.spaceReal(10) : root.barSize - Style.spaceReal(8)
 
-          Row {
+          // RowLayout rather than Row: a Row only lays items out horizontally
+          // and leaves each at its own y, so a 13px tile beside a taller line of
+          // text sits high. A layout centres both when asked to.
+          RowLayout {
             id: content
             anchors.centerIn: parent
             clip: true
-            spacing: Style.spaceReal(3)
+            spacing: root.iconGap
 
             Text {
+              Layout.alignment: Qt.AlignVCenter
               text: String(root.displayWorkspaceId(pill.workspaceId))
               color: pill.urgent ? root.bgColor : root.fgColor
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -838,6 +853,7 @@ BarWidget {
             Repeater {
               model: root.iconEntriesFor(pill.workspace)
               delegate: WindowIcon {
+                Layout.alignment: Qt.AlignVCenter
                 tint: pill.urgent ? root.bgColor : root.fgColor
               }
             }
@@ -875,13 +891,14 @@ BarWidget {
           : scratchpadContent.implicitWidth + Style.spaceReal(16)
         implicitHeight: root.vertical ? scratchpadContent.implicitHeight + Style.spaceReal(10) : root.barSize - Style.spaceReal(8)
 
-        Row {
+        RowLayout {
           id: scratchpadContent
           anchors.centerIn: parent
           clip: true
-          spacing: Style.spaceReal(3)
+          spacing: root.iconGap
 
           Text {
+            Layout.alignment: Qt.AlignVCenter
             text: root.scratchpadLabel
             visible: text !== ""
             color: root.fgColor
@@ -891,7 +908,9 @@ BarWidget {
 
           Repeater {
             model: root.iconEntriesFor(root.scratchpadWorkspace)
-            delegate: WindowIcon { }
+            delegate: WindowIcon {
+              Layout.alignment: Qt.AlignVCenter
+            }
           }
         }
 

@@ -52,6 +52,8 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `showEmpty` | `false` | Keep every workspace number on the bar up to `maxWorkspaceId`, occupied or not. Set `true` for stock-like behaviour. |
 | `showIcons` | `true` | Draw an app icon per open window. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
+| `iconSize` | 80% of the bar's icon canvas | Logo size in px (minimum 6). 13 px on the stock theme — a hair smaller than the number beside it. |
+| `iconGap` | `4` | Space in px between two entries in a pill, so logos never touch. |
 | `systemIcons` | `true` | Draw each window's real logo from its desktop entry and the system icon theme. Set `false` to always use Nerd Font glyphs. |
 | `remoteIcons` | `false` | Fetch brand logos over the network when nothing local resolves. See [Logos](#logos). |
 | `remoteIconSource` | dashboard-icons via jsDelivr | URL template for the logo fetch; `{slug}` is replaced with the brand slug. |
@@ -101,6 +103,15 @@ baked in, so a bare circle sitting next to a full-bleed square would otherwise
 read as two different sizes; the tile gives every window the same footprint.
 A logo that fails to decode falls back to the glyph rather than leaving an
 empty tile behind.
+
+The tile is `iconSize` px square with `iconGap` px between neighbours. Like the
+rest of this widget's settings they only take effect after a shell restart —
+editing `shell.json` alone leaves a running bar on its old values:
+
+```bash
+omarchy bar set io.github.ehlxr.advanced-workspaces iconSize 16 --json
+omarchy restart shell
+```
 
 ### When a logo is wrong
 
