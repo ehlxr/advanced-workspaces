@@ -481,8 +481,19 @@ BarWidget {
   property bool remoteScanDone: false
   property int remoteRevision: 0
 
+  // Hard cap for a single logo download. Logo tiles are a few dozen kilobytes;
+  // anything larger than this is either not a logo or not one we want on disk.
+  readonly property int remoteMaxBytes: 1048576
+
   function remoteTarget(slug) {
     return root.remoteIconDir + "/" + slug + ".png"
+  }
+
+  // Hidden (so the scan below ignores it), same directory (so the finishing
+  // rename is atomic), and only ever renamed into place after a bounded,
+  // validated download.
+  function remoteTemp(slug) {
+    return root.remoteIconDir + "/.tmp." + slug + ".png"
   }
 
   // `ls` rather than a stat per slug: one process reports everything the last
@@ -490,7 +501,7 @@ BarWidget {
   // cached logo is never re-fetched.
   Process {
     id: remoteScan
-    command: ["ls", "-1", root.remoteIconDir]
+    command: ["/usr/bin/ls", "-1", root.remoteIconDir]
     stdout: SplitParser {
       onRead: function(line) {
         var name = String(line || "").trim()
@@ -518,27 +529,99 @@ BarWidget {
     function onRemoteRevisionChanged() { root.collectRemoteIcons() }
   }
 
+  // Every download is settled through one place: mark the slug ready or
+  // failed, advance the queue, and only then offer the next candidate of a
+  // failed chain a try.
+  function settleRemote(slug, rest, ready) {
+    var readyMap = root.remoteReady
+    var failedMap = root.remoteFailed
+    if (ready) readyMap[slug] = true
+    else failedMap[slug] = true
+    root.remoteReady = readyMap
+    root.remoteFailed = failedMap
+    root.remoteRevision++
+    root.pumpRemoteQueue()
+    // A miss only means this guess was wrong, so the window's next candidate
+    // is worth a try.
+    if (!ready && rest.length > 0) root.requestRemoteIcon(rest)
+  }
+
+  // Best-effort removal of a temp file the pipeline no longer wants. The queue
+  // only advances once the fetch has settled, and each pipeline path discards
+  // at most once, so one process is never asked to run concurrently.
+  Process {
+    id: remoteCleaner
+    property string path: ""
+    command: ["/usr/bin/rm", "-f", remoteCleaner.path]
+  }
+  function discardRemoteFile(path) {
+    remoteCleaner.path = path
+    remoteCleaner.running = true
+  }
+
+  // Curl by absolute path, with a time limit and a hard byte cap, writing only
+  // to the hidden temp file. A capped-out or failed response never reaches the
+  // cache path.
   Process {
     id: remoteFetch
     property string slug: ""
     property var rest: []
-    command: ["curl", "-fsSL", "--create-dirs", "--max-time", "10",
-              "-o", root.remoteTarget(remoteFetch.slug),
+    command: ["/usr/bin/curl", "-fsSL", "--create-dirs", "--max-time", "10",
+              "--max-filesize", String(root.remoteMaxBytes),
+              "-o", root.remoteTemp(remoteFetch.slug),
               root.remoteIconSource.replace("{slug}", remoteFetch.slug)]
     onExited: function(exitCode) {
-      var ready = root.remoteReady
-      var failed = root.remoteFailed
-      if (exitCode === 0) ready[remoteFetch.slug] = true
-      else failed[remoteFetch.slug] = true
-      root.remoteReady = ready
-      root.remoteFailed = failed
-      // Captured before pumping: starting the next queued slug overwrites it.
-      var rest = remoteFetch.rest
-      root.remoteRevision++
-      root.pumpRemoteQueue()
-      // A miss only means this guess was wrong, so the window's next candidate
-      // is worth a try.
-      if (exitCode !== 0 && rest.length > 0) root.requestRemoteIcon(rest)
+      if (exitCode !== 0) {
+        root.discardRemoteFile(root.remoteTemp(remoteFetch.slug))
+        root.settleRemote(remoteFetch.slug, remoteFetch.rest, false)
+        return
+      }
+      remoteVerify.slug = remoteFetch.slug
+      remoteVerify.rest = remoteFetch.rest
+      remoteVerify.mime = ""
+      remoteVerify.running = true
+    }
+  }
+
+  // Accepts a response only when the payload really is an image; anything else
+  // is tossed rather than cached, so junk never lands on disk or re-fetches.
+  Process {
+    id: remoteVerify
+    property string slug: ""
+    property var rest: []
+    property string mime: ""
+    command: ["/usr/bin/file", "--brief", "--mime-type",
+              root.remoteTemp(remoteVerify.slug)]
+    stdout: SplitParser {
+      onRead: function(line) {
+        remoteVerify.mime = String(line || "").trim()
+      }
+    }
+    onExited: function(exitCode) {
+      var ok = exitCode === 0 && String(remoteVerify.mime).indexOf("image/") === 0
+      if (!ok) {
+        root.discardRemoteFile(root.remoteTemp(remoteVerify.slug))
+        root.settleRemote(remoteVerify.slug, remoteVerify.rest, false)
+        return
+      }
+      remoteInstall.slug = remoteVerify.slug
+      remoteInstall.rest = remoteVerify.rest
+      remoteInstall.running = true
+    }
+  }
+
+  // Same-directory rename, so the finished logo appears atomically and a
+  // viewer never observes a half-written file.
+  Process {
+    id: remoteInstall
+    property string slug: ""
+    property var rest: []
+    command: ["/usr/bin/mv", "-f", root.remoteTemp(remoteInstall.slug),
+              root.remoteTarget(remoteInstall.slug)]
+    onExited: function(exitCode) {
+      var ok = exitCode === 0
+      if (!ok) root.discardRemoteFile(root.remoteTemp(remoteInstall.slug))
+      root.settleRemote(remoteInstall.slug, remoteInstall.rest, ok)
     }
   }
 
