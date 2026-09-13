@@ -1,35 +1,32 @@
-> Fork of [Decent Workspaces](https://github.com/TheTrueFerret/omarchy-decent-workspaces)
-> by TheTrueFerret. The difference: every window is drawn with its real app
-> logo — resolved from the system icon theme, or fetched once and cached —
-> instead of only a Nerd Font glyph, with the upstream glyph table kept as the
-> fallback. See [Logos](#logos).
-
-AI Generated, didn't even look at the code, but does the job.
-I actually created this manually for waybar in the past... ain't doing that again ;)
-
 # Advanced Workspaces
 
-![Three bars stacked: the default showing only workspaces 1, 3, 4, 5 and 8 with app icons plus a scratchpad pill; the same bar with showEmpty filling in every number to 10; and again with maxIcons collapsing extra windows into +N](preview.png)
+![Three stacked shots of the bar widget: the default view showing only the workspaces in use, each pill carrying its workspace number and the real logo of every window on it; the same row with showEmpty pinning every workspace up to 10; and maxIcons collapsing a crowded workspace's icons into +N](preview.png)
 
 A bar widget for Omarchy Quattro that shows workspaces the way you actually use
-them:
+them.
 
-- **Only workspaces in use.** Empty workspaces are hidden, except the one you
-  are on, so the bar never goes blank underneath you.
-- **Only this monitor's workspaces.** Each bar filters to its own monitor and
-  highlights *that monitor's* active workspace, softer where keyboard focus
-  isn't, so you can tell at a glance where you are.
-- **App icons beside the number.** Every open window contributes a real logo,
-  with the Nerd Font glyph as the fallback. See [Logos](#logos).
-- **Pills that follow the theme.** The workspace you are on is filled with the
-  theme's accent, the others with its neutral idle fill, and hovering lifts a
-  pill one step. The alphas come from the theme's control tokens
-  (`[controls]` in `shell.toml`), so there is no hard-coded colour to fight.
+## Highlights
+
+- **Only the workspaces you use.** Empty workspaces stay out of the way until
+  you step onto them, so the widget never goes blank or turns into a row of
+  dead numbers.
+- **Real logos, not just glyphs.** Every open window is drawn with its actual
+  app icon — resolved from your desktop entry and the system icon theme, with
+  site logos for browser tabs. Nerd Fonts are only the fallback. See
+  [Logos](#logos).
+- **Pills that follow the theme.** The active workspace fills with the theme
+  accent, the others with the neutral idle fill, and hovering lifts a pill.
+  The alphas come from `[controls]` in `shell.toml` — no hard-coded colour to
+  fight.
+- **Per monitor, per bar.** Each bar only shows the workspaces that live on
+  its monitor and highlights its own active one, softer where keyboard focus
+  isn't.
 - **The scratchpad, when it holds something.** Windows stashed with
   `SUPER + ALT + S` get their own pill instead of vanishing until you toggle
   the stash open.
 
-Click a workspace to focus it.
+Click a workspace to focus it. Everything else — `showEmpty`, `maxIcons`,
+`iconSize`, per-monitor numbering — is a per-widget setting.
 
 ## Install
 
