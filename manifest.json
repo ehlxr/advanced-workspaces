@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.ehlxr.advanced-workspaces",
   "name": "Advanced Workspaces",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "ehlxr",
   "license": "MIT",
   "description": "Per-monitor workspace indicators: only workspaces with windows, each labelled with its number and the real logo of every window on it. Fork of Decent Workspaces by TheTrueFerret.",
