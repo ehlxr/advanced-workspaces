@@ -16,6 +16,19 @@ function slugify(value) {
   return candidate.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
 }
 
+// A slug reduced to characters that are safe in a file name. Slugify already
+// narrows most inputs to [a-z0-9-], but the rule table's site logos skip
+// slugify, and every cache file name is derived here, so any leftover
+// punctuation is folded defensively rather than trusted. Slashes always become
+// dashes, so a slug can never walk out of the cache directory; a leading dot
+// (and the bare "." / "..") cannot survive, so a slug never becomes a hidden
+// entry or a parent reference.
+function fileName(slug) {
+  var name = String(slug || "").replace(/[^A-Za-z0-9._-]+/g, "-")
+                               .replace(/^[-.]+|[-.]+$/g, "")
+  return name === "" ? "logo" : name
+}
+
 // The slugs worth trying for a window with no local icon, best guess first.
 // Duplicates and empties drop out, so passing the desktop entry's Icon=, its id
 // and the window class together cannot ask for the same slug twice.

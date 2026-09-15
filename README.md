@@ -162,11 +162,14 @@ omarchy bar set io.github.ehlxr.advanced-workspaces remoteIconSource \
 A slug the host does not have is remembered as a miss and falls back to the
 glyph instead of retrying on every render.
 
-Downloads are hard-bounded: each response is capped at 1 MiB and only kept when
-`file` recognises it as an image. Oversized or non-image responses are
-discarded rather than cached, and a logo only lands in the cache after a
-complete, validated download — so a partial or hostile response never ends up
-on the bar.
+Downloads are hard-bounded and land only as an exact verified image: each
+response is capped at 1 MiB even when the server declares no size, the cache
+directory is created owner-only and checked by descriptor so a pre-placed
+symlink cannot redirect the write, and each logo streams into a temporary file
+with an unpredictable name that `file` must accept as an image before an atomic
+rename puts it in the cache. Oversized, non-image or failed responses are
+discarded — and their temp files cleaned up — rather than cached, so a partial
+or hostile response never ends up on the bar.
 
 ### Keeping every workspace on the bar
 

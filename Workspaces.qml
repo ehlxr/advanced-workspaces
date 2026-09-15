@@ -485,15 +485,15 @@ BarWidget {
   // anything larger than this is either not a logo or not one we want on disk.
   readonly property int remoteMaxBytes: 1048576
 
-  function remoteTarget(slug) {
-    return root.remoteIconDir + "/" + slug + ".png"
+  // A slug reduced to characters that are safe in a file name. Slugify already
+  // narrows most inputs to [a-z0-9-], but the rule table's site logos skip
+  // slugify, and every cache file name is derived here.
+  function remoteFileName(slug) {
+    return IconLogic.fileName(slug)
   }
 
-  // Hidden (so the scan below ignores it), same directory (so the finishing
-  // rename is atomic), and only ever renamed into place after a bounded,
-  // validated download.
-  function remoteTemp(slug) {
-    return root.remoteIconDir + "/.tmp." + slug + ".png"
+  function remoteTarget(slug) {
+    return root.remoteIconDir + "/" + root.remoteFileName(slug) + ".png"
   }
 
   // `ls` rather than a stat per slug: one process reports everything the last
@@ -546,82 +546,77 @@ BarWidget {
     if (!ready && rest.length > 0) root.requestRemoteIcon(rest)
   }
 
-  // Best-effort removal of a temp file the pipeline no longer wants. The queue
-  // only advances once the fetch has settled, and each pipeline path discards
-  // at most once, so one process is never asked to run concurrently.
-  Process {
-    id: remoteCleaner
-    property string path: ""
-    command: ["/usr/bin/rm", "-f", remoteCleaner.path]
-  }
-  function discardRemoteFile(path) {
-    remoteCleaner.path = path
-    remoteCleaner.running = true
-  }
+  // One process settles the whole pipeline so no step can be raced apart. It
+  // verifies the private cache directory by the descriptor it holds, writes
+  // only to an unpredictable exclusive 0600 temp file through an already-open
+  // descriptor, validates the very bytes written, and atomically renames the
+  // result into place within the same verified directory.
+  readonly property string remoteFetchScript: `
+set -eu
+set -o pipefail
+export LC_ALL=C
 
-  // Curl by absolute path, with a time limit and a hard byte cap, writing only
-  // to the hidden temp file. A capped-out or failed response never reaches the
-  // cache path.
+dir=$1
+url=$2
+maxbytes=$3
+target=$4
+
+# The cache lives under the user's own cache home. Refuse a directory that was
+# pre-placed as a symlink, create it if missing, pin it open by descriptor and
+# verify that descriptor really is an owner-only directory before anything is
+# written there.
+[ ! -L "$dir" ]
+/usr/bin/mkdir -p -- "$dir"
+[ ! -L "$dir" ]
+exec 9< "$dir"
+[ -d "$dir" ]
+[ "$(/usr/bin/id -u)" = "$(/usr/bin/stat -Lc %u /proc/self/fd/9)" ]
+[ -d /proc/self/fd/9 ]
+/usr/bin/chmod 700 /proc/self/fd/9
+cd /proc/self/fd/9
+
+# An unpredictable, exclusive, owner-only temporary file. O_EXCL means creation
+# never clobbers an existing entry - symlink or not - and the random name gives
+# an attacker nothing to pre-position. Everything after this line is relative to
+# the verified directory above, so a swapped path cannot redirect the writes.
+tmp=$(/usr/bin/mktemp .tmp.XXXXXX)
+trap '/usr/bin/rm -f -- "$tmp"' EXIT HUP INT TERM
+exec 4> "$tmp"
+
+# Stream the bounded response into the descriptor already held rather than
+# re-opening a path, so the only inode ever written is the one just created.
+# --max-filesize stops a declared size up front and the pipe cut bounds the
+# bytes that actually reach disk even without a Content-Length header.
+if ! /usr/bin/curl -fsSL --max-time 10 --max-filesize "$maxbytes" -- "$url" | /usr/bin/head -c "$(($maxbytes + 1))" >&4; then
+  exit 1
+fi
+
+# Anything over the cap, or anything file does not recognise as an image, is
+# discarded rather than cached. Both checks read the very bytes that were
+# streamed, from the same file that is about to become the cache entry.
+[ "$(/usr/bin/stat -c %s /proc/self/fd/4)" -le "$maxbytes" ]
+mime=$(/usr/bin/file -b --mime-type "$tmp")
+case "$mime" in
+  image/*) ;;
+  *) exit 1 ;;
+esac
+
+# Atomic replace within this same verified, owner-only directory.
+/usr/bin/mv -f -- "$tmp" "$target"
+trap - EXIT HUP INT TERM
+`
+
   Process {
     id: remoteFetch
     property string slug: ""
     property var rest: []
-    command: ["/usr/bin/curl", "-fsSL", "--create-dirs", "--max-time", "10",
-              "--max-filesize", String(root.remoteMaxBytes),
-              "-o", root.remoteTemp(remoteFetch.slug),
-              root.remoteIconSource.replace("{slug}", remoteFetch.slug)]
+    command: ["/usr/bin/bash", "-c", root.remoteFetchScript, "advanced-workspaces",
+              root.remoteIconDir,
+              root.remoteIconSource.replace("{slug}", remoteFetch.slug),
+              String(root.remoteMaxBytes),
+              root.remoteFileName(remoteFetch.slug) + ".png"]
     onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        root.discardRemoteFile(root.remoteTemp(remoteFetch.slug))
-        root.settleRemote(remoteFetch.slug, remoteFetch.rest, false)
-        return
-      }
-      remoteVerify.slug = remoteFetch.slug
-      remoteVerify.rest = remoteFetch.rest
-      remoteVerify.mime = ""
-      remoteVerify.running = true
-    }
-  }
-
-  // Accepts a response only when the payload really is an image; anything else
-  // is tossed rather than cached, so junk never lands on disk or re-fetches.
-  Process {
-    id: remoteVerify
-    property string slug: ""
-    property var rest: []
-    property string mime: ""
-    command: ["/usr/bin/file", "--brief", "--mime-type",
-              root.remoteTemp(remoteVerify.slug)]
-    stdout: SplitParser {
-      onRead: function(line) {
-        remoteVerify.mime = String(line || "").trim()
-      }
-    }
-    onExited: function(exitCode) {
-      var ok = exitCode === 0 && String(remoteVerify.mime).indexOf("image/") === 0
-      if (!ok) {
-        root.discardRemoteFile(root.remoteTemp(remoteVerify.slug))
-        root.settleRemote(remoteVerify.slug, remoteVerify.rest, false)
-        return
-      }
-      remoteInstall.slug = remoteVerify.slug
-      remoteInstall.rest = remoteVerify.rest
-      remoteInstall.running = true
-    }
-  }
-
-  // Same-directory rename, so the finished logo appears atomically and a
-  // viewer never observes a half-written file.
-  Process {
-    id: remoteInstall
-    property string slug: ""
-    property var rest: []
-    command: ["/usr/bin/mv", "-f", root.remoteTemp(remoteInstall.slug),
-              root.remoteTarget(remoteInstall.slug)]
-    onExited: function(exitCode) {
-      var ok = exitCode === 0
-      if (!ok) root.discardRemoteFile(root.remoteTemp(remoteInstall.slug))
-      root.settleRemote(remoteInstall.slug, remoteInstall.rest, ok)
+      root.settleRemote(remoteFetch.slug, remoteFetch.rest, exitCode === 0)
     }
   }
 

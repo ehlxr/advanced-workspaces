@@ -47,6 +47,24 @@ test('remoteCandidates keeps order, drops empties and dedupes', () => {
   assert.deepEqual(plain(Logic.remoteCandidates(null)), [])
 })
 
+test('fileName keeps slugs while folding anything unsafe out of a path', () => {
+  // Plain slugs, rule-table logos and mixed case pass straight through.
+  assert.equal(Logic.fileName('github'), 'github')
+  assert.equal(Logic.fileName('facebook-messenger'), 'facebook-messenger')
+  assert.equal(Logic.fileName('Vivaldi'), 'Vivaldi')
+  // Slashes become dashes, so nothing can escape the cache directory.
+  assert.equal(Logic.fileName('../etc/passwd'), 'etc-passwd')
+  assert.equal(Logic.fileName('..'), 'logo')
+  assert.equal(Logic.fileName('.'), 'logo')
+  // A leading dot no longer hides the entry, and empties fall back.
+  assert.equal(Logic.fileName('.cache'), 'cache')
+  assert.equal(Logic.fileName(''), 'logo')
+  assert.equal(Logic.fileName(null), 'logo')
+  assert.equal(Logic.fileName(undefined), 'logo')
+  // Dots and hyphens survive only inside the one component.
+  assert.equal(Logic.fileName('io.github.ehlxr'), 'io.github.ehlxr')
+})
+
 // --- overrides --------------------------------------------------------------
 
 test('lookupOverride matches a class in any case and a title exactly', () => {
