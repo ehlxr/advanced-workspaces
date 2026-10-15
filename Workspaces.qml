@@ -417,6 +417,7 @@ BarWidget {
     target: DesktopEntries
     function onApplicationsChanged() {
       root.systemIconCache = ({})
+      root.webAppEntryCache = ({})
       root.desktopRevision++
     }
   }
@@ -425,11 +426,46 @@ BarWidget {
   // first and wins outright: heuristicLookup scores by name and exec similarity,
   // so a short or generic class can lose to a worse entry even when the id is
   // identical. byId takes the id without its .desktop suffix.
+  //
+  // A Chromium web app comes next. Its class is built from the URL
+  // (`chrome-discord.com__channels_@me-Default`) and its .desktop file has no
+  // StartupWMClass, so heuristicLookup would only find the browser - or
+  // nothing - and the pill showed a Chrome logo for Discord.
   function desktopEntryFor(cls) {
     var exact = null
     try { exact = DesktopEntries.byId(cls) } catch (e) { exact = null }
     if (exact) return exact
+    var webApp = root.webAppEntryFor(cls)
+    if (webApp) return webApp
     try { return DesktopEntries.heuristicLookup(cls) } catch (e) { return null }
+  }
+
+  // Web-app lookups walk every desktop entry, and desktopEntryFor runs from the
+  // icon bindings, so the answer is kept per class - null included, as a miss
+  // is the common case for an ordinary dashed class. Cleared with the icon
+  // cache when the entries change.
+  property var webAppEntryCache: ({})
+
+  // The desktop entry whose web-app URL opens as this class, or null. Quickshell
+  // hands over Exec both as the parsed argument list (`command`, quotes already
+  // gone) and as the raw line (`execString`); the list is preferred.
+  function webAppEntryFor(cls) {
+    if (!IconLogic.isWebAppClass(cls)) return null
+    var cached = root.webAppEntryCache[cls]
+    if (cached !== undefined) return cached
+
+    var found = null
+    var apps = DesktopEntries.applications ? DesktopEntries.applications.values : null
+    for (var i = 0; apps && i < apps.length && !found; i++) {
+      var entry = apps[i]
+      if (!entry) continue
+      var command = entry.command && entry.command.length > 0 ? Array.from(entry.command) : null
+      var url = IconLogic.webAppUrl(command || entry.execString)
+      if (url !== "" && IconLogic.webAppClassMatches(cls, url)) found = entry
+    }
+
+    root.webAppEntryCache[cls] = found
+    return found
   }
 
   // The desktop entry is the only place that knows an application's icon name,
