@@ -1,6 +1,7 @@
 // Tests for the pure icon decisions: the rule table that picks a glyph (and a
-// brand slug) for a window, and the helpers that turn a class into a slug or a
-// user override into something drawable.
+// brand slug) for a window, the helpers that turn a class into a slug or a user
+// override into something drawable, and the matching of a Chromium web-app
+// class back to the URL its desktop entry launches.
 //
 // Both modules are QML libraries, so `.pragma library` is stripped before the
 // file runs under Node's vm. Their top-level functions then land on the context
@@ -114,6 +115,87 @@ test('classifyOverride reads images, and falls back to drawing the text', () => 
   assert.equal(Logic.classifyOverride('', null), null)
 })
 
+// --- Chromium web apps ------------------------------------------------------
+
+test('webAppName is the host, an underscore, then the path with slashes folded', () => {
+  assert.equal(Logic.webAppName('https://discord.com/channels/@me'), 'discord.com__channels_@me')
+  // A bare origin has the path "/", hence the double underscore.
+  assert.equal(Logic.webAppName('https://www.notion.so'), 'www.notion.so__')
+  assert.equal(Logic.webAppName('https://www.notion.so/'), 'www.notion.so__')
+  assert.equal(Logic.webAppName('https://cakeagency.teamwork.com/app/home'),
+    'cakeagency.teamwork.com__app_home')
+  // The query, fragment, port and user info never reach the class.
+  assert.equal(Logic.webAppName('https://me@Mail.Example.com:8443/inbox?tab=1#top'),
+    'mail.example.com__inbox')
+  assert.equal(Logic.webAppName('file:///home/me/page.html'), '')
+  assert.equal(Logic.webAppName('discord.com'), '')
+  assert.equal(Logic.webAppName(''), '')
+  assert.equal(Logic.webAppName(null), '')
+})
+
+test('webAppUrl reads omarchy-launch-webapp and --app= launchers', () => {
+  assert.equal(Logic.webAppUrl('omarchy-launch-webapp https://discord.com/channels/@me'),
+    'https://discord.com/channels/@me')
+  assert.equal(Logic.webAppUrl(
+    'omarchy-launch-webapp "https://cakeagency.teamwork.com/app/home" --profile-directory="Profile 1"'),
+    'https://cakeagency.teamwork.com/app/home')
+  assert.equal(Logic.webAppUrl('/usr/bin/omarchy-launch-webapp https://www.notion.so'),
+    'https://www.notion.so')
+  assert.equal(Logic.webAppUrl('chromium --app=https://www.notion.so --profile-directory=Default'),
+    'https://www.notion.so')
+  assert.equal(Logic.webAppUrl('chromium --app="https://discord.com/channels/@me" %U'),
+    'https://discord.com/channels/@me')
+  assert.equal(Logic.webAppUrl("brave '--app=https://x.com/home'"), 'https://x.com/home')
+  // DesktopEntry.command is already split, with the quotes gone.
+  assert.equal(Logic.webAppUrl(['chromium', '--app=https://discord.com/channels/@me']),
+    'https://discord.com/channels/@me')
+  assert.equal(Logic.webAppUrl(['omarchy-launch-webapp', 'https://www.notion.so']),
+    'https://www.notion.so')
+  // Not a web app.
+  assert.equal(Logic.webAppUrl('chromium %U'), '')
+  assert.equal(Logic.webAppUrl('omarchy-launch-webapp'), '')
+  assert.equal(Logic.webAppUrl(''), '')
+  assert.equal(Logic.webAppUrl(null), '')
+})
+
+test('a web-app class matches the URL that opened it', () => {
+  assert.equal(Logic.webAppClassMatches('chrome-discord.com__channels_@me-Default',
+    'https://discord.com/channels/@me'), true)
+  assert.equal(Logic.webAppClassMatches('chrome-www.notion.so__-Default', 'https://www.notion.so'), true)
+  // Another profile, another browser, and the lowercased class the rules see.
+  assert.equal(Logic.webAppClassMatches('chromium-cakeagency.teamwork.com__app_home-Profile_1',
+    'https://cakeagency.teamwork.com/app/home'), true)
+  assert.equal(Logic.webAppClassMatches('brave-x.com__home-Default', 'https://x.com/home'), true)
+  assert.equal(Logic.webAppClassMatches('chrome-discord.com__channels_@me-default',
+    'https://discord.com/channels/@me'), true)
+  // A dash inside the host is part of the app name, not a boundary.
+  assert.equal(Logic.webAppClassMatches('chrome-my-site.com__-Default', 'https://my-site.com/'), true)
+})
+
+test('a web-app class does not match a different URL', () => {
+  // Same host, different path: the app name is the whole thing, not a prefix.
+  assert.equal(Logic.webAppClassMatches('chrome-discord.com__-Default',
+    'https://discord.com/channels/@me'), false)
+  assert.equal(Logic.webAppClassMatches('chrome-discord.com__channels_@me-Default',
+    'https://discord.com/'), false)
+  // x.com is not foo-x.com, even though "-x.com__-" sits in that class.
+  assert.equal(Logic.webAppClassMatches('chrome-foo-x.com__-Default', 'https://x.com/'), false)
+  assert.equal(Logic.webAppClassMatches('chrome-www.notion.so__-Default', 'https://notion.so'), false)
+  // Ordinary classes are not web apps at all.
+  assert.equal(Logic.webAppClassMatches('google-chrome', 'https://www.notion.so'), false)
+  assert.equal(Logic.webAppClassMatches('discord', 'https://discord.com/channels/@me'), false)
+  assert.equal(Logic.webAppClassMatches('chrome-www.notion.so__-Default', ''), false)
+})
+
+test('isWebAppClass spots the browser-app-profile shape', () => {
+  assert.equal(Logic.isWebAppClass('chrome-discord.com__channels_@me-Default'), true)
+  assert.equal(Logic.isWebAppClass('vivaldi-chatgpt.com__-default'), true)
+  assert.equal(Logic.isWebAppClass('google-chrome'), false)
+  assert.equal(Logic.isWebAppClass('com.mitchellh.ghostty'), false)
+  assert.equal(Logic.isWebAppClass('vivaldi-stable'), false)
+  assert.equal(Logic.isWebAppClass(''), false)
+})
+
 // --- the rule table ---------------------------------------------------------
 
 test('a browser tab on a named site keeps the site, not the browser', () => {
@@ -165,6 +247,14 @@ test('a web-app window still matches on its own class', () => {
   const pwa = plain(Rules.match('vivaldi-chatgpt.com__-default', 'sign in - google account'))
   assert.equal(pwa.site, true)
   assert.notEqual(pwa.icon, Rules.fallback)
+})
+
+test('a web app with no site rule is not a site, so its desktop icon can win', () => {
+  // The widget only looks up a local icon when the rule is not a site; these
+  // classes fall through to the browser glyph, which the entry's Icon= replaces.
+  for (const cls of ['chrome-discord.com__channels_@me-default', 'chrome-www.notion.so__-default']) {
+    assert.equal(plain(Rules.match(cls, '')).site, false, cls)
+  }
 })
 
 test('a plain browser window falls through to the browser', () => {

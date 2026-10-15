@@ -91,6 +91,11 @@ Every window's icon comes from the most specific source that resolves:
    `heuristicLookup`. Either way the entry's `Icon=` is resolved against the
    system icon theme. This is what gets VS Code (`code` → `vscode`) and Vivaldi
    (`vivaldi-stable` → `vivaldi`) right, and it covers most apps.
+   Chromium-family web apps are matched by URL instead: a window opened with
+   `--app=URL` (which is what `omarchy-launch-webapp URL` does) gets a class
+   Chromium builds from that URL, such as `chrome-discord.com__channels_@me-Default`,
+   so the desktop entry that launches the same URL supplies the icon even though
+   it has no `StartupWMClass`.
 4. **The Nerd Font glyph** the rule table picked, when a fetch is not an option.
 
 Steps 1 to 3 are entirely offline and are what `systemIcons` turns on. The
@@ -242,7 +247,7 @@ omarchy plugin remove io.github.ehlxr.advanced-workspaces
 ## Development
 
 The icon decisions live in `IconRules.js` (the rule table) and `IconLogic.js`
-(slugs, overrides) as plain functions with no Quickshell dependency, so they run
+(slugs, overrides, web-app URLs) as plain functions with no Quickshell dependency, so they run
 under Node:
 
 ```bash
