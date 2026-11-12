@@ -249,6 +249,10 @@ under Node:
 npm test        # node --test
 ```
 
+`tests/clients.test.cjs` covers the client snapshot the widget draws icons and
+occupancy from — closed windows, moves, the scratchpad, icon limits, and
+events arriving during an in-flight `hyprctl` query.
+
 The QML itself needs a running desktop. Editing a bar widget needs a shell
 restart — the "local plugin changed, reloading" hot reload does not rebuild bar
 surfaces:
@@ -274,6 +278,11 @@ The icon map is adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 workspace numbering added by [@jorgeccastro](https://github.com/jorgeccastro)
 (#3), and the scratchpad pill suggested by
 [@sirfrank0](https://github.com/sirfrank0) (#4).
+
+Icons and occupancy are read from a fresh `hyprctl -j clients` snapshot instead
+of Quickshell's cached `workspace.toplevels`, so a closed window's logo cannot
+outlive it. That fix, and `tests/clients.test.cjs`, are ported from the parent
+project's #10 by [@sametgultekin](https://github.com/sametgultekin).
 
 ## License
 
